@@ -98,6 +98,10 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  initial_thread->par = NULL;
+  sema_init(&initial_thread->new_process_load, 0);
+  sema_init(&initial_thread->child_process_exit, 0);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -181,6 +185,20 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+
+  /* 부모 process 저장 */
+  t->par = running_thread();
+  /* 프로그램 load false */
+  t->load_success = false;
+  /* 프로세스 exit false */
+  t->is_exit = false;
+  /* exit semaphore 0으로 init */
+  sema_init(&t->child_process_exit, 0);
+  /* load semaphore 0으로 init */
+  sema_init(&t->new_process_load, 0);
+  /* parent process의 child list에 추가 */
+  list_push_back(&t->par->children, &t->child);
+
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
@@ -467,6 +485,12 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  /* 자식 리스트 초기화 */
+  list_init(&t->children);
+//  sema_init(&initial_thread->new_process_load, 0);
+//  sema_init(&initial_thread->child_process_exit, 0);
+
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -538,7 +562,7 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+//      palloc_free_page (prev);
     }
 }
 

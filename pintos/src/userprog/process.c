@@ -17,10 +17,14 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h" // semaphore 함수
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+struct thread *get_child_process (tid_t child_tid);		// child_tid와 일치하는 child process return, 없을 경우 NULL return
+void construct_stack(void **esp, char** argv, int argc);	// stack에 argument 쌓는 함수
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -30,6 +34,11 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  /* file_name pasrsing */
+  char str[130];
+  strlcpy(str, file_name, strlen(file_name)+1);
+  char *next_ptr;
+  char *real_file = strtok_r(str, " ", &next_ptr);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -39,7 +48,19 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  struct thread* cur = thread_current();
+  tid = thread_create (real_file, PRI_DEFAULT, start_process, fn_copy);
+
+  /* wait until new process load */
+  sema_down(&cur->new_process_load);
+  /* 자식 process의 process descriptor 검색 */
+  struct thread* child = get_child_process(tid);
+  /* child process load 실패 시 */ 
+  if(!child->load_success){
+    palloc_free_page (fn_copy);
+    return process_wait(tid);
+  }
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -61,11 +82,20 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  /* child process의 executable file이 모두 load되면 parent process 다시 진행 */
+  struct thread* cur = thread_current();
+  sema_up(&cur->par->new_process_load);
+  /* executable load 실패 시, quit. */
+  if (!success){
+    /* process descriptor에 load fail */
+    cur->load_success = false;
+    cur->exit_status = -1; 
     thread_exit ();
+  }
 
+  palloc_free_page (file_name);  
+  /* process descriptor에 load success */
+  cur->load_success = true;
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -88,7 +118,15 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  int exit_status = -1;
+  struct thread* child = get_child_process(child_tid);	// child_tid와 일치하는 child process 탐색
+  /* child_tid와 일치하는 child process가 존재하는 경우 */
+  if(child != NULL){
+    sema_down(&child->child_process_exit);
+    exit_status = child->exit_status;
+    list_remove(&child->child);
+  }
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -110,10 +148,16 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+
+
       cur->pagedir = NULL;
       pagedir_activate (NULL);
-      pagedir_destroy (pd);
+      pagedir_destroy (pd);      
     }
+
+  /* exit semaphore 증가 시키고, process termination message 출력*/
+  sema_up(&cur->child_process_exit);
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -205,6 +249,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
+
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
@@ -221,8 +266,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  /* To Do: parse file */
+  char **argv = palloc_get_page(0);
+  int argc = 0;
+  char str[130];
+  /* argv에 각 argument 저장 */
+  strlcpy(str, file_name, strlen(file_name) + 1);
+  char *next_ptr;
+  char *ptr = strtok_r(str, " ", &next_ptr);
+  while(ptr){
+    argv[argc++] = ptr;
+    ptr = strtok_r(NULL, " ", &next_ptr);
+  }
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -304,6 +362,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
+
+  /* To Do: construct stack */
+  construct_stack(esp, argv, argc);
+  palloc_free_page(argv);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -462,4 +524,73 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+struct thread *get_child_process (tid_t child_tid)
+{
+/* 자식 리스트에 접근하여 프로세스 디스크립터 검색
+   해당 pid가 존재하면 프로세스 디스크립터 반환
+   리스트에 존재하지 않으면 NULL 리턴 */
+  struct thread *ret = NULL;
+  struct thread *par = thread_current();
+  struct list* children = &par->children;
+  struct list_elem *i;
+
+  /* 모든 child list를 탐색하여 */
+  for(i = list_begin(children); i != list_end(children); i = list_next(i)){
+    struct thread *child = list_entry(i, struct thread, child);       // child process
+    /* child_tid 와 일치하는 tid를 갖는 child process 찾은 경우 */
+    if(child->tid == child_tid){
+      ret = child;
+      break;
+    }
+  }
+
+  return ret;
+}
+
+void construct_stack(void **esp, char** argv, int argc){
+  uint32_t **addr_argv = palloc_get_page(0);
+  size_t word = sizeof(uint32_t);
+  int i;
+  int alignment = 0;
+
+  // push arguments
+  for(i = argc - 1; i >= 0; i--){
+    int length = strlen(argv[i]);
+
+    *esp -= length + 1;
+    strlcpy(*esp, argv[i], length + 1);
+    addr_argv[i] = *esp;
+    alignment += length + 1;
+  }
+
+  // 4byte alignment
+  alignment %= word;
+  if(alignment)
+    *esp -= word - alignment;
+
+  // push NULL(argv[argc])
+  *esp -= word;
+  **(uint32_t **)esp = 0;
+
+  // push arguments addr
+  for(i = argc - 1; i >= 0; i--){
+    *esp -= word;
+    **(uint32_t **)esp = addr_argv[i];
+  }
+  palloc_free_page(addr_argv);
+
+  // push argv addr
+  uint32_t tmp = (uint32_t)*esp;
+  *esp -= word;
+  **(uint32_t **)esp = tmp;
+
+  // push argc
+  *esp -= word;
+  **(uint32_t **)esp = argc;
+
+  // push return addr
+  *esp -= word;
+  **(uint32_t **)esp = 0;
 }
