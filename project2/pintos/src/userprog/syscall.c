@@ -9,6 +9,8 @@
 #include "userprog/process.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -27,14 +29,14 @@ void check_address(struct intr_frame *f, int argc)
     /* Unmapped Virtual Memory */
     if(pagedir_get_page(cur->pagedir, (void*)(f->esp + word * i)) == NULL)
       exit(-1);
-    }
+  }
 }
 
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  sema_init(&file_read_write, 1);
+  lock_init(&file_read_write);	// file_read_write lock 변수 초기화
 }
 
 static void
@@ -217,14 +219,15 @@ int open (const char *file){
   if(file == NULL)
     return -1;
 
-  sema_down(&file_read_write);
-
   struct thread *cur = thread_current();
   struct file *f = filesys_open(file);
+  /* file이 존재하는 경우 */
   if(f != NULL){
+    /* file descriptor table 탐색하여
+       가장 작은 free fd에 open한 file의 포인터 저장 */
     for(int i=2; i<128; i++){
-      if(cur->fd[i] == NULL){
-        cur->fd[i] = f;
+      if(cur->file_descriptor[i] == NULL){
+        cur->file_descriptor[i] = f;
         ret = i;
 
 	/* Denying Writes to Executable */
@@ -237,17 +240,19 @@ int open (const char *file){
     }
   }
 
-  sema_up(&file_read_write);
-
   return ret; 
 }
 
 int filesize (int fd){
   struct thread *cur = thread_current();
-  if(cur->fd[fd] == NULL)
-    return -1;
 
-  return file_length(cur->fd[fd]);
+  if(fd < 0 || fd >= 128)
+    exit(-1);
+
+  if(cur->file_descriptor[fd] == NULL)
+    exit(-1);
+
+  return file_length(cur->file_descriptor[fd]);
 }
 
 int read (int fd, void *buffer, unsigned length){
@@ -259,8 +264,8 @@ int read (int fd, void *buffer, unsigned length){
   if(is_kernel_vaddr(buffer))
     exit(-1);
 
-  sema_down(&file_read_write);
-
+  lock_acquire(&file_read_write);
+  /* Critical Section */
   if(fd == STDIN_FILENO){
     unsigned read_bytes = 0;
 
@@ -276,11 +281,11 @@ int read (int fd, void *buffer, unsigned length){
   }
   else{
     struct thread *cur = thread_current();
-    if(cur->fd[fd] != NULL)
-      ret = file_read(cur->fd[fd], buffer, length);
+    if(cur->file_descriptor[fd] != NULL)
+      ret = file_read(cur->file_descriptor[fd], buffer, length);
   }
-
-  sema_up(&file_read_write);
+  /* Critical Section */
+  lock_release(&file_read_write);
 
   return ret;
 }
@@ -289,23 +294,22 @@ int write (int fd, const void *buffer, unsigned length)
 {
   int ret = -1;
 
-  sema_down(&file_read_write);
-
   if(fd < 0 || fd >= 128)
     exit(-1);
 
-
+  lock_acquire(&file_read_write);
+  /* Critical Section */
   if(fd == STDOUT_FILENO){    
     putbuf(buffer, length);
     ret = length;
   }
   else{
     struct thread *cur = thread_current();
-    if(cur->fd[fd] != NULL)
-      ret = file_write(cur->fd[fd], buffer, length);
+    if(cur->file_descriptor[fd] != NULL)
+      ret = file_write(cur->file_descriptor[fd], buffer, length);
   }
-
-  sema_up(&file_read_write);
+  /* Critical Section */
+  lock_release(&file_read_write);
 
   return ret;
 }
@@ -313,22 +317,29 @@ int write (int fd, const void *buffer, unsigned length)
 void seek (int fd, unsigned position){
   struct thread *cur = thread_current();
 
-  file_seek(cur->fd[fd], position);	
+  /* file의 크기 이상으로 pos를 변경할 경우 error */
+  if(filesize(fd) <= position)
+    exit(-1);
+
+  file_seek(cur->file_descriptor[fd], position);	
 }
 
 unsigned tell (int fd){
   struct thread *cur = thread_current();
 
-  return file_tell(cur->fd[fd]);
+  return file_tell(cur->file_descriptor[fd]);
 }
 
 void close (int fd){
   struct thread *cur = thread_current();
- 
+
+  /* 0미만 128이상의 fd number를 close하는 경우 error
+     STDIN(0), STDOUT(1) file descriptor를 close하는 경우 error */
   if(fd <= 1 || fd >= 128)
     exit(-1); 
-  file_close(cur->fd[fd]);
-  cur->fd[fd] = NULL;  	
+
+  file_close(cur->file_descriptor[fd]);
+  cur->file_descriptor[fd] = NULL;  	
 }
 /*
 mapid_t mmap (int fd, void *addr){

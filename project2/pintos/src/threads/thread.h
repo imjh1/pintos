@@ -106,7 +106,7 @@ struct thread
     struct semaphore new_process_load;  /* child process 생성 위한 semaphore */
     struct semaphore child_process_exit;/* child process 종료 위한 semaphore */
     int exit_status;                    /* process의 exit status */
-    struct file *fd[128];
+    struct file *file_descriptor[128];	/* file descriptors */
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

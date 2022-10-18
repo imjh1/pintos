@@ -3,7 +3,7 @@
 #include "threads/thread.h"
 #include "threads/interrupt.h"
 
-struct semaphore file_read_write;
+struct lock file_read_write;
 
 void syscall_init (void);
 /* invalid pointer check */

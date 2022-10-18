@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -155,7 +156,7 @@ page_fault (struct intr_frame *f)
   /* kernel이 user 영역에 잘못 접근 */
   if(!user && is_user_vaddr(fault_addr))
 	  exit(-1);
-  if(user && pagedir_get_page(thread_current()->pagedir, fault_addr) == NULL)
+  if(user && (pagedir_get_page(thread_current()->pagedir, fault_addr) == NULL))
 	exit(-1);
   if(fault_addr == NULL)
 	exit(-1);

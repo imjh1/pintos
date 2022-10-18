@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h" // semaphore 함수
 #include "threads/malloc.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -51,7 +52,6 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   struct thread* cur = thread_current();
   tid = thread_create (real_file, PRI_DEFAULT, start_process, fn_copy);
-
   /* wait until new process load */
   sema_down(&cur->new_process_load);
   /* 자식 process의 process descriptor 검색 */
@@ -59,7 +59,7 @@ process_execute (const char *file_name)
   /* child process load 실패 시 */ 
   if(!child->load_success){
     palloc_free_page (fn_copy);
-    return wait(tid);//process_wait(tid);
+    return wait(tid);
   }
 
   if (tid == TID_ERROR)
@@ -94,7 +94,7 @@ start_process (void *file_name_)
     thread_exit ();
   }
 
-  palloc_free_page (file_name);  
+  palloc_free_page (file_name);
   /* process descriptor에 load success */
   cur->load_success = true;
   /* Start the user process by simulating a return from an
@@ -125,8 +125,8 @@ process_wait (tid_t child_tid UNUSED)
   if(child != NULL){
     sema_down(&child->child_process_exit);
     exit_status = child->exit_status;
-    list_remove(&child->child);
-    palloc_free_page(child);	// multi-oom
+    list_remove(&child->child); // child process의 list 제거
+    palloc_free_page(child);	// child process에 할당된 page free
   }
   return exit_status;
 }
@@ -140,11 +140,14 @@ process_exit (void)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  for(int i=2; i<128; i++)
+
+  /* 열려있는 file descriptor 모두 close */
+  for (int i=2; i<128; i++)
     close(i);
-  while(!list_empty(&cur->children)){
+
+  /* child list element 제거 */
+  while(!list_empty(&cur->children))
     list_pop_front(&cur->children);
-  }
 
   pd = cur->pagedir;
   if (pd != NULL) 
@@ -156,8 +159,6 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-
-
 
       cur->pagedir = NULL;
       pagedir_activate (NULL);
@@ -293,6 +294,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
+      palloc_free_page(argv);
       goto done; 
     }
 
@@ -306,6 +308,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phnum > 1024) 
     {
       printf ("load: %s: error loading executable\n", file_name);
+      palloc_free_page(argv);
       goto done; 
     }
 
@@ -316,11 +319,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
       struct Elf32_Phdr phdr;
 
       if (file_ofs < 0 || file_ofs > file_length (file)){
+	palloc_free_page(argv);
         goto done;
       }
       file_seek (file, file_ofs);
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr){
+	palloc_free_page(argv);
         goto done;
       }
       file_ofs += sizeof phdr;
@@ -336,6 +341,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_DYNAMIC:
         case PT_INTERP:
         case PT_SHLIB:
+	  palloc_free_page(argv);
           goto done;
         case PT_LOAD:
           if (validate_segment (&phdr, file)) 
@@ -362,10 +368,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable)){
+		palloc_free_page(argv);
                 goto done;
 	      }
             }
           else{
+	    palloc_free_page(argv);
             goto done;
 	  }
           break;
@@ -374,6 +382,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Set up stack. */
   if (!setup_stack (esp)){
+    palloc_free_page(argv);
     goto done;
   }
 
@@ -383,10 +392,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+  palloc_free_page(argv);
 
  done:
   /* We arrive here whether the load is successful or not. */
-  palloc_free_page(argv);
   file_close (file);
   return success;
 }

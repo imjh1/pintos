@@ -100,8 +100,6 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 
   initial_thread->par = NULL;
-//  sema_init(&initial_thread->new_process_load, 0);
-//  sema_init(&initial_thread->child_process_exit, 0);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -491,9 +489,9 @@ init_thread (struct thread *t, const char *name, int priority)
   /* semaphore 0으로 초기화 */
   sema_init(&t->new_process_load, 0);
   sema_init(&t->child_process_exit, 0);
-  /* fd 초기화 */
+  /* file descriptor 초기화 */
   for (int i=0; i<128; i++)
-    t->fd[i] = NULL;
+    t->file_descriptor[i] = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
