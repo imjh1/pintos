@@ -1,4 +1,4 @@
-#include "userprog/process.h"
+#include "userprog/process.h"//
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -17,8 +17,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/synch.h" // semaphore 함수
-#include "threads/malloc.h"
+#include "threads/synch.h" 
+#include "threads/malloc.h"//
 #include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
