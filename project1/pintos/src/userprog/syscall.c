@@ -12,8 +12,23 @@
 
 static void syscall_handler (struct intr_frame *);
 
-/* invalid pointer check */
-void check_address(struct intr_frame *f, int argc);
+void check_address(struct intr_frame *f, int argc)
+{
+  size_t word = sizeof(uint32_t);
+  struct thread *cur = thread_current();
+
+  for(int i=1; i<=argc; i++){
+    /* Pointer to kernel address space */
+    if(is_kernel_vaddr(f->esp + word * i))
+      exit(-1);
+    /* NULL pointer */
+    if((void*)(f->esp + word * i) == NULL)
+      exit(-1);
+    /* Unmapped Virtual Memory */
+    if(pagedir_get_page(cur->pagedir, (void*)(f->esp + word * i)) == NULL)
+      exit(-1);
+    }
+}
 
 void
 syscall_init (void) 
@@ -151,20 +166,7 @@ void exit (int status){
 }
 
 tid_t exec (const char *file){
-  tid_t ret = -1;
-
-//  if(is_kernel_vaddr(file)){
-//	  return ret;
-//  }
-//  if((void*)(file) == NULL){
-//	  return ret;
-//  }
-  
-
-  ret = process_execute(file);
-
-
-  return ret;
+  return process_execute(file);
 }
 
 int wait (tid_t pid){
@@ -195,6 +197,7 @@ int read (int fd, void *buffer, unsigned length){
 
     while(read_bytes < length){
       uint8_t key = input_getc();
+      ((char *)buffer)[read_bytes++] = key;
       if(key == '\0')
         break;
       read_bytes++;      
@@ -205,7 +208,7 @@ int read (int fd, void *buffer, unsigned length){
   return ret;
 }
 
-int write (int fd, void *buffer, unsigned length)
+int write (int fd, const void *buffer, unsigned length)
 {
   if(fd == STDOUT_FILENO){    
     putbuf(buffer, length);
@@ -273,23 +276,5 @@ int max_of_four_int (int a, int b, int c, int d){
   a = a > b ? a : b;
   c = c > d ? c : d;
   return a > c ? a : c;
-}
-
-void check_address(struct intr_frame *f, int argc)
-{
-  size_t word = sizeof(uint32_t);
-  struct thread *cur = thread_current();
-
-  for(int i=1; i<=argc; i++){
-    /* Pointer to kernel address space */
-    if(is_kernel_vaddr(f->esp + word * i))
-      exit(-1);
-    /* NULL pointer */
-    if((void*)(f->esp + word * i) == NULL)
-      exit(-1);
-    /* Unmapped Virtual Memory */
-    if(pagedir_get_page(cur->pagedir, (void*)(f->esp + word * i)) == NULL)
-      exit(-1);
-    }
 }
 

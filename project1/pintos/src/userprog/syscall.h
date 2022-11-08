@@ -1,7 +1,10 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 #include "threads/thread.h"
+#include "threads/interrupt.h"
 void syscall_init (void);
+/* invalid pointer check */
+void check_address(struct intr_frame *f, int argc);
 /* Project 2 */
 void halt (void);
 void exit (int status);
@@ -12,7 +15,7 @@ bool remove (const char *file);
 int open (const char *file);
 int filesize (int fd);*/
 int read (int fd, void *buffer, unsigned length);
-int write (int fd, void *buffer, unsigned length);
+int write (int fd, const void *buffer, unsigned length);
 //void seek (int fd, unsigned position);
 //unsigned tell (int fd);
 //void close (int fd);

@@ -34,6 +34,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+
   /* file_name pasrsing */
   char str[130];
   strlcpy(str, file_name, strlen(file_name)+1);
@@ -284,6 +285,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
+      palloc_free_page(argv);
       goto done; 
     }
 
@@ -297,6 +299,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phnum > 1024) 
     {
       printf ("load: %s: error loading executable\n", file_name);
+      palloc_free_page(argv);
       goto done; 
     }
 
@@ -306,12 +309,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       struct Elf32_Phdr phdr;
 
-      if (file_ofs < 0 || file_ofs > file_length (file))
+      if (file_ofs < 0 || file_ofs > file_length (file)){
+	palloc_free_page(argv);
         goto done;
+      }
       file_seek (file, file_ofs);
 
-      if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
+      if (file_read (file, &phdr, sizeof phdr) != sizeof phdr){
+	palloc_free_page(argv);
         goto done;
+      }
       file_ofs += sizeof phdr;
       switch (phdr.p_type) 
         {
@@ -325,6 +332,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_DYNAMIC:
         case PT_INTERP:
         case PT_SHLIB:
+	  palloc_free_page(argv);
           goto done;
         case PT_LOAD:
           if (validate_segment (&phdr, file)) 
@@ -350,23 +358,28 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+                                 read_bytes, zero_bytes, writable)){
+		palloc_free_page(argv);
                 goto done;
+	      }
             }
-          else
+          else{
+	    palloc_free_page(argv);
             goto done;
+	  }
           break;
         }
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp)){
+    palloc_free_page(argv);
     goto done;
+  }
 
   /* To Do: construct stack */
   construct_stack(esp, argv, argc);
   palloc_free_page(argv);
-
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 

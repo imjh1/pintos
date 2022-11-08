@@ -100,8 +100,8 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 
   initial_thread->par = NULL;
-  sema_init(&initial_thread->new_process_load, 0);
-  sema_init(&initial_thread->child_process_exit, 0);
+//  sema_init(&initial_thread->new_process_load, 0);
+//  sema_init(&initial_thread->child_process_exit, 0);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -488,8 +488,9 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* 자식 리스트 초기화 */
   list_init(&t->children);
-//  sema_init(&initial_thread->new_process_load, 0);
-//  sema_init(&initial_thread->child_process_exit, 0);
+  /* semaphore 0으로 초기화 */
+  sema_init(&t->new_process_load, 0);
+  sema_init(&t->child_process_exit, 0);
 
 }
 

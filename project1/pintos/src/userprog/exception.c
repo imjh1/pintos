@@ -144,17 +144,17 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  /* kernel 영역의 주소에 접근 */
-  if(is_kernel_vaddr(fault_addr))
-    exit(-1);
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* kernel에 의해 access 되는 경우 */
-  if(!user)
-    exit(-1);
+  /* user가 kernel 영역의 주소에 잘못 접근 */
+  if(user && is_kernel_vaddr(fault_addr))
+	  exit(-1);
+  /* kernel이 user 영역에 잘못 접근 */
+  if(!user && is_user_vaddr(fault_addr))
+	  exit(-1);
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
