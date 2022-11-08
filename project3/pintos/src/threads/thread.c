@@ -517,16 +517,19 @@ void thread_aging (void){
 /* load_avg update */
 void recalculate_load_avg (void){
   int ready_threads = 0;
+  /* current thread가 idle thread가 아닌 경우 ready thread cnt + 1 */
   if(thread_current () != idle_thread)
     ready_threads++;
 
   struct list_elem *e;
+  /* ready state thread의 개수 counting */
   for(e = list_begin(&ready_list); e != list_end(&ready_list); e = list_next(e))
     ready_threads++;
 
   load_avg = prod_fp_fp(div_fp_fp(int_to_fp(59), int_to_fp(60)), load_avg);
   load_avg = sum_fp_fp(load_avg, prod_fp_fp(div_fp_fp(int_to_fp(1), int_to_fp(60)), int_to_fp(ready_threads)));
-
+  
+  /* load_avg는 0 이상 */
   if(load_avg < 0)
     load_avg = 0;
 }
@@ -536,15 +539,17 @@ void recalculate_recent_cpu (void){
   if(thread_current () != idle_thread)
     thread_current ()->recent_cpu = sum_int_fp(1, thread_current ()->recent_cpu);
 
+  /* TIMER FREQ마다 recent_cpu 값 재조정 */
   if (timer_ticks () % TIMER_FREQ != 0)
     return;
 
   struct list_elem *e;
-
+  /* load_avg 계산 */
   recalculate_load_avg();
 
   int tmp = prod_int_fp(2, load_avg);
   int v = div_fp_fp(tmp, sum_int_fp(1, tmp));
+  /* 모든 thread의 recent_cpu 값 재조정 */
   for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)){
     struct thread *t = list_entry (e, struct thread, allelem);
     t->recent_cpu = sum_int_fp(t->nice, prod_fp_fp(v, t->recent_cpu));    
@@ -555,11 +560,11 @@ void recalculate_recent_cpu (void){
 void recalculate_priority (void){
   struct list_elem *e;
 
-   if (timer_ticks () % 4 != 0) 
+  /* TIME_SLCIE 마다 priority 재조정 */
+  if (timer_ticks () % TIME_SLICE != 0) 
      return;
 
-//  for(e = list_begin(&ready_list); e!= list_end(&ready_list); e = list_next(e)){
-//    struct thread *t = list_entry (e, struct thread, elem);
+  /* 모든 thread의 priority를 재조정 */
   for(e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e)){
     struct thread *t = list_entry (e, struct thread, allelem);
     t->priority = PRI_MAX - fp_to_int_round_near(t->recent_cpu >> 2) - (t->nice * 2);
@@ -569,18 +574,21 @@ void recalculate_priority (void){
       t->priority = PRI_MIN;      
   }
 
+  /* ready list를 다시 priority order로 재조정 */
   reorder_ready_list();
 }
 
 /* ready_list를 priority order로 재조정 */
 void reorder_ready_list (void){
   struct list tmp;
-
+  
+  /* ready list의 모든 thread를 제거하고, 임시 list에 저장 */
   list_init(&tmp); 
   while(!list_empty(&ready_list)){
     list_push_back(&tmp, list_pop_front(&ready_list));
   }
-
+  /* 임시 list의 모든 thread를 제거하고, 
+     ready list에 priority order로 삽입 */
   while(!list_empty(&tmp)){
     struct list_elem *e = list_pop_front(&tmp);
     thread_push_priority_order(list_entry(e, struct thread, elem)); 
