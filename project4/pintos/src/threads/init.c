@@ -126,6 +126,8 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+  sec_chance_init ();  
+  swap_init ();
 
   printf ("Boot complete.\n");
   

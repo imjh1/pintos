@@ -19,6 +19,8 @@ struct frame {
 void sec_chance_init (void);
 void sec_chance_insert (struct frame *f);
 void sec_chance_delete (struct frame *f);
+struct list_elem *next_frame (void);
+void evict_frame (void);
 
 #endif
 

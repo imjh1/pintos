@@ -150,13 +150,22 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
   
+//  printf("%p\n", fault_addr);
+
   /* Project 4 */
-  if(!not_present || !is_user_vaddr(fault_addr) || !fault_addr)
+  if(!not_present || !is_user_vaddr(fault_addr) || !fault_addr){
     exit(-1);
+  }
 
   
   struct supplement_page *sp = sp_find(fault_addr);
-  if(sp == NULL){
+
+  if(sp != NULL){
+    if(!handle_mm_fault(sp)){
+      exit(-1);
+    }
+  }
+  else{
     /* stack access에 fault 발생한 경우, stack 크기 증가 */
     if(fault_addr >= f->esp - 32 && fault_addr >= PHYS_BASE - (1 << 23)){
       bool success = stack_growth(fault_addr);
@@ -167,8 +176,7 @@ page_fault (struct intr_frame *f)
     }
     exit(-1);
   }
-  else
-    exit(-1);
+
     /* user가 kernel 영역의 주소에 잘못 접근 */
 //  if(user && is_kernel_vaddr(fault_addr))
 //        exit(-1);

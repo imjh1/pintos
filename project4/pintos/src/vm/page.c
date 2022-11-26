@@ -30,6 +30,7 @@ void sp_init (struct hash *spt)
 
 bool sp_insert (struct hash *spt, struct supplement_page *sp)
 {
+  sp->swap_slot = 0;
   if(hash_insert(spt, &sp->elem) == NULL)
     return true;
   return false;
