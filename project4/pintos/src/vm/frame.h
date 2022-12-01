@@ -5,6 +5,7 @@
 #include <list.h>
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
 
 struct list sec_chance_list;
 struct list_elem *check_frame;

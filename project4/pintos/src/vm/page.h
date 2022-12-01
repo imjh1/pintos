@@ -11,7 +11,6 @@ struct supplement_page {
   bool writable;
   bool is_loaded;
   struct hash_elem elem;
-
   size_t swap_slot;
 };
 

@@ -117,7 +117,6 @@ start_process (void *file_name_)
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting.
-
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
@@ -191,7 +190,7 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -405,7 +404,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -458,15 +457,11 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 /* Loads a segment starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
    memory are initialized, as follows:
-
         - READ_BYTES bytes at UPAGE must be read from FILE
           starting at offset OFS.
-
         - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
-
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
@@ -529,7 +524,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       fr->sp = sp;
       sp_insert(&thread_current ()->spt, sp);
- 
+//	printf("load vaddr: %p\n", upage); 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -565,6 +560,7 @@ setup_stack (void **esp)
       sp->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
       sp->writable = true;
       sp->is_loaded = true;
+      sp_insert(&thread_current ()->spt, sp);
 
       fr->sp = sp;
 
@@ -718,6 +714,7 @@ bool handle_mm_fault(struct supplement_page *sp)
   uint8_t *kpage;
   bool success = false;
 
+//	printf("mm_fault_start\n");
   kpage = palloc_get_page (PAL_USER);
   if (kpage == NULL){
     evict_frame ();
@@ -726,21 +723,27 @@ bool handle_mm_fault(struct supplement_page *sp)
   if (kpage != NULL)
     {
       struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
+
+//	if(fr == NULL)
+//		printf("malloc fail\n");
+
       fr->paddr = kpage;
+//	printf("paddr: %p", fr->paddr);
       fr->owner = thread_current ();
 
       sec_chance_insert(fr);
 
-
-      swap_in(sp->swap_slot, kpage);
-
       success = install_page (pg_round_down(sp->vaddr), kpage, true);
       if (success){
+        if(sp->swap_slot != SIZE_MAX)
+          swap_in(sp->swap_slot, kpage);
+
         fr->sp = sp;
       }
       else{
         sec_chance_delete(fr);
         palloc_free_page (kpage);
+//		printf("x\n");
       }
     }
   return success;

@@ -83,7 +83,6 @@ merge (void)
   mp_left = CHUNK_CNT;
   for (i = 0; i < CHUNK_CNT; i++)
     mp[i] = buf1 + CHUNK_SIZE * i;
-
   /* Merge. */
   op = buf2;
   while (mp_left > 0) 
@@ -96,11 +95,12 @@ merge (void)
 
       /* Append value to buf2. */
       *op++ = *mp[min];
-
       /* Advance merge pointer.
          Delete this chunk from the set if it's emptied. */ 
       if ((++mp[min] - buf1) % CHUNK_SIZE == 0)
         mp[min] = mp[--mp_left]; 
+
+	
     }
 }
 

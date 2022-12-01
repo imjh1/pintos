@@ -3,8 +3,7 @@
 
 static unsigned spt_hash_func (const struct hash_elem *e,void *aux)
 {
-  /* hash_entry()로 element에 대한 supplement_page 구조체 검색 */
-  /* hash_int()를 이용해서 supplement_page의 멤버 vaddr에 대한 해시값을 구하고 반환 */
+  /* hash_int()를 이용해서 supplement_page의member인 vaddr에 대한 해시값을 구하고 return */
   return hash_int (hash_entry(e, struct supplement_page, elem)->vaddr);
 }
 
@@ -29,8 +28,8 @@ void sp_init (struct hash *spt)
 }
 
 bool sp_insert (struct hash *spt, struct supplement_page *sp)
-{
-  sp->swap_slot = 0;
+{  
+  sp->swap_slot = SIZE_MAX;
   if(hash_insert(spt, &sp->elem) == NULL)
     return true;
   return false;
@@ -60,4 +59,3 @@ void sp_destroy (struct hash *spt)
 {
 
 }
-

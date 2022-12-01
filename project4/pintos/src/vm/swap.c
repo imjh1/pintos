@@ -6,7 +6,7 @@
 
 void swap_init()
 {
-  swap_bitmap = bitmap_create(1<<16);
+  swap_bitmap = bitmap_create(1<<13);
 }
 
 void swap_in(size_t idx, void *paddr)
@@ -18,11 +18,13 @@ void swap_in(size_t idx, void *paddr)
 //    printf("bit test suc %d\n", idx);
     int blocks = PGSIZE / BLOCK_SECTOR_SIZE;
     for(int i=0; i<blocks; i++){
-      block_read(swap_disk, blocks * idx + i, blocks * i + paddr);
+      block_read(swap_disk, blocks * idx + i, BLOCK_SECTOR_SIZE * i + paddr);
     }
     bitmap_reset(swap_bitmap, idx);
+//	printf("swap fin\n");
   }
-
+//  else
+//    printf("fail\n");
 }
 
 size_t swap_out(void *paddr)
@@ -38,7 +40,7 @@ size_t swap_out(void *paddr)
       int blocks = PGSIZE / BLOCK_SECTOR_SIZE;
       for(int i=0; i<blocks ; i++)
         {
-          block_write(swap_disk, blocks * swap_idx+i, blocks*i+paddr);
+          block_write(swap_disk, blocks * swap_idx+i, BLOCK_SECTOR_SIZE * i + paddr);
         }
       bitmap_set(swap_bitmap, swap_idx, true);
 //      printf("swap_out suc\n");
@@ -48,4 +50,6 @@ size_t swap_out(void *paddr)
 
   return swap_idx;
 }
+
+
 
