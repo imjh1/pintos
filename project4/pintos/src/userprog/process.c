@@ -484,24 +484,17 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL){
+	/* memory 부족한 경우 frame evict */
         evict_frame ();
-//       			printf("load seg evict %p\n", upage); 
 	kpage = palloc_get_page (PAL_USER);
 	if (kpage == NULL){
           return false;
 	}
       }
 
-      struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
-      fr->paddr = kpage;
-      fr->owner = thread_current ();
-      
-      sec_chance_insert(fr);
-
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-	  sec_chance_delete(fr);
           palloc_free_page (kpage);
           return false; 
         }
@@ -510,21 +503,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable)) 
         {
-          sec_chance_delete(fr);
           palloc_free_page (kpage);
           return false; 
         }
       
       /* Project 4 */
+      /* 생성한 page의 정보를 supplement page에 저장하고 hash table에 삽입 */
       struct supplement_page *sp = (struct supplement_page *)malloc(sizeof(struct supplement_page));
-
       sp->vaddr = upage;
       sp->writable = writable;
-      sp->is_loaded = true;
-
-      fr->sp = sp;
       sp_insert(&thread_current ()->spt, sp);
-//	printf("load vaddr: %p\n", upage); 
+      /* load된 frame의 정보를 frame에 저장하고, sec_chance_list에 삽입 */
+      struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
+      fr->paddr = kpage;
+      fr->owner = thread_current ();
+      fr->sp = sp;
+      sec_chance_insert(fr);
+
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -544,28 +539,22 @@ setup_stack (void **esp)
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if(kpage == NULL){
-//    printf("setup evict\n");
+    /* physical memory 부족한 경우 evict frame */ 
     evict_frame ();
     kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   }
 
   if (kpage != NULL) 
     {
+      struct supplement_page *sp = (struct supplement_page *)malloc(sizeof(struct supplement_page));
+      sp->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+      sp->writable = true;
+      sp_insert(&thread_current ()->spt, sp);
+
       struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
       fr->paddr = kpage;
       fr->owner = thread_current ();
-
-      struct supplement_page *sp = (struct supplement_page *)malloc(sizeof(struct supplement_page));
-
-      sp->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      sp->writable = true;
-      sp->is_loaded = true;
-      sp_insert(&thread_current ()->spt, sp);
-
       fr->sp = sp;
-
-     /*****/ 
-
       sec_chance_insert(fr);
 
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -669,52 +658,49 @@ void construct_stack(void **esp, char** argv, int argc){
   **(uint32_t **)esp = 0;
 }
 
-bool stack_growth(void *addr)
-{
-  uint8_t *kpage;
-  bool success = false;
-  struct supplement_page *sp = (struct supplement_page *)malloc(sizeof(struct supplement_page));
-
-  if(sp == NULL)
-    return success;
-
-  kpage = palloc_get_page (PAL_USER);
-  if (kpage == NULL){
-    evict_frame ();
-    kpage = palloc_get_page (PAL_USER);
-  }
-  if (kpage != NULL)
-    {
-      struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
-      fr->paddr = kpage;
-      fr->owner = thread_current ();
-
-      sec_chance_insert(fr);
-
-
-      success = install_page (pg_round_down(addr), kpage, true);
-      if (success){
-        sp->vaddr = pg_round_down(addr);
-        sp->writable = true;
-        sp->is_loaded = true;     
-        
-        fr->sp = sp;
-        sp_insert(&thread_current ()->spt, sp); 
-      }
-      else{
-	sec_chance_delete(fr);
-        palloc_free_page (kpage);
-      }
-    }
-  return success;
-}
-
 bool handle_mm_fault(struct supplement_page *sp)
 {
   uint8_t *kpage;
   bool success = false;
 
-//	printf("mm_fault_start\n");
+  /* empty frame search */
+  kpage = palloc_get_page (PAL_USER);
+  if (kpage == NULL){
+    /* if no empty frame, evict */
+    evict_frame ();
+    kpage = palloc_get_page (PAL_USER);
+  }
+
+  if (kpage != NULL){
+    /* empty frame에 page load */
+    success = install_page (pg_round_down(sp->vaddr), kpage, true);
+    if (success){
+      /* disk로 swap_out되었던 page라면, 다시 swap in */
+      if(sp->swap_slot != SIZE_MAX)
+        swap_in(sp->swap_slot, kpage);
+      
+      /* frame 정보 저장 */
+      struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
+      fr->paddr = kpage;
+      fr->owner = thread_current ();
+      fr->sp = sp;
+      sec_chance_insert(fr);
+    }
+    else{
+      palloc_free_page (kpage);
+    }
+  }
+
+  return success;
+}
+
+/* stack growth 필요시, 새로운 page 할당해줌 */
+bool stack_growth(void *addr)
+{
+  uint8_t *kpage;
+  bool success = false;
+
+  /* empty frame search */
   kpage = palloc_get_page (PAL_USER);
   if (kpage == NULL){
     evict_frame ();
@@ -722,29 +708,25 @@ bool handle_mm_fault(struct supplement_page *sp)
   }
   if (kpage != NULL)
     {
-      struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
-
-//	if(fr == NULL)
-//		printf("malloc fail\n");
-
-      fr->paddr = kpage;
-//	printf("paddr: %p", fr->paddr);
-      fr->owner = thread_current ();
-
-      sec_chance_insert(fr);
-
-      success = install_page (pg_round_down(sp->vaddr), kpage, true);
+      success = install_page (pg_round_down(addr), kpage, true);
       if (success){
-        if(sp->swap_slot != SIZE_MAX)
-          swap_in(sp->swap_slot, kpage);
+        /* page 정보 저장 */
+        struct supplement_page *sp = (struct supplement_page *)malloc(sizeof(struct supplement_page));
+        sp->vaddr = pg_round_down(addr);
+        sp->writable = true;
+        sp_insert(&thread_current ()->spt, sp);
 
+        /* frame 정보 저장 */
+        struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
+        fr->paddr = kpage;
+        fr->owner = thread_current ();
         fr->sp = sp;
+        sec_chance_insert(fr);
       }
       else{
-        sec_chance_delete(fr);
         palloc_free_page (kpage);
-//		printf("x\n");
       }
     }
   return success;
 }
+

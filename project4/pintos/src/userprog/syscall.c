@@ -345,27 +345,20 @@ void close (int fd){
 mapid_t mmap (int fd, void *addr){
 	return -1;
 }
-
 void munmap (mapid_t){
-
 }
-
 bool chdir (const char *dir){
 	return true;
 }
-
 bool mkdir (const char *dir){
 	return true;
 }
-
 bool readdir (int fd, char name[READDIR_MAX_LEN + 1]){
 	return true;
 }
-
 bool isdir (int fd){
 	return -1;
 }
-
 int inumber (int fd){
 	return -1;
 }
@@ -390,4 +383,3 @@ int max_of_four_int (int a, int b, int c, int d){
   c = c > d ? c : d;
   return a > c ? a : c;
 }
-

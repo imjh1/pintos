@@ -146,30 +146,26 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
   
-//  printf("%p\n", fault_addr);
-
   /* Project 4 */
-  if(!not_present || !is_user_vaddr(fault_addr) || !fault_addr){
-//	printf("%p\n", fault_addr);
-    exit(-1);
-  }
+  /* Invalid Reference */
+  if(!not_present || !is_user_vaddr(fault_addr) || !fault_addr)
+    exit(-1); 
 
-  
+  /* fault address에 해당하는 page search */
   struct supplement_page *sp = sp_find(fault_addr);
 
+  /* page가 존재하는 경우, 해당 page를 다시 physical memory에 load */
   if(sp != NULL){
-    if(!handle_mm_fault(sp)){
-      exit(-1);
-    }
+    if(!handle_mm_fault(sp))
+      exit(-1);   
   }
   else{
     /* stack access에 fault 발생한 경우, stack 크기 증가 */
-    if(fault_addr >= f->esp - 32 && fault_addr >= PHYS_BASE - (1 << 23)){
+    if(fault_addr <= f->esp && fault_addr >= f->esp - 32){
       bool success = stack_growth(fault_addr);
 
       if(success)
-        return;
-      
+        return;  
     }
     exit(-1);
   }

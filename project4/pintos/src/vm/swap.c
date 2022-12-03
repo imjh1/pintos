@@ -4,52 +4,44 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
-void swap_init()
+#define blocks (PGSIZE / BLOCK_SECTOR_SIZE)
+#define swap_table_size 1024
+
+void swap_init (void)
 {
-  swap_bitmap = bitmap_create(1<<13);
+  swap_disk = block_get_role(BLOCK_SWAP);
+  swap_table = (int *)malloc(sizeof(int) * swap_table_size);
+  for(int i=0; i<swap_table_size; i++)
+    swap_table[i] = -1;
 }
 
 void swap_in(size_t idx, void *paddr)
 {
-//  printf("swap_in start!, idx: %d\n", idx);
-
-  struct block *swap_disk = block_get_role(BLOCK_SWAP);
-  if(bitmap_test(swap_bitmap, idx)){
-//    printf("bit test suc %d\n", idx);
-    int blocks = PGSIZE / BLOCK_SECTOR_SIZE;
-    for(int i=0; i<blocks; i++){
-      block_read(swap_disk, blocks * idx + i, BLOCK_SECTOR_SIZE * i + paddr);
-    }
-    bitmap_reset(swap_bitmap, idx);
-//	printf("swap fin\n");
-  }
-//  else
-//    printf("fail\n");
+  /* page read from swap disk */
+  for(int i=0; i<blocks; i++)
+    block_read(swap_disk, blocks * idx + i, BLOCK_SECTOR_SIZE * i + paddr);
+  /* swap_slot 비우기 */
+  swap_table[idx] = -1;
 }
 
 size_t swap_out(void *paddr)
 {
-//  printf("swap_out start!\n");
- 
-  struct block *swap_disk=block_get_role(BLOCK_SWAP);
-  //first fit에 따라 가장 처음으로 false를 나타내는 index를 가져옴.
-  size_t swap_idx = bitmap_scan(swap_bitmap, 0, 1, false);
-  if(BITMAP_ERROR != swap_idx)
-    {
-//	printf("swap_out idx = %d\n", swap_idx);
-      int blocks = PGSIZE / BLOCK_SECTOR_SIZE;
-      for(int i=0; i<blocks ; i++)
-        {
-          block_write(swap_disk, blocks * swap_idx+i, BLOCK_SECTOR_SIZE * i + paddr);
-        }
-      bitmap_set(swap_bitmap, swap_idx, true);
-//      printf("swap_out suc\n");
+  size_t swap_idx = SIZE_MAX;
+  /* swap table의 비어있는 swap slot 탐색 */
+  for(int i=0; i<swap_table_size; i++) {
+    /* 비어있는 swap slot 찾은 경우 */
+    if(swap_table[i] == -1) {
+      swap_idx = i;
+      /* write page to swap disk */
+      for(int j=0; j<blocks; j++)
+        block_write(swap_disk, blocks * swap_idx + j, BLOCK_SECTOR_SIZE * j + paddr);
+
+      /* swap slot 채우기 */
+      swap_table[i] = 1;
+
+      break;
     }
-//  else
-//    printf("swap_out error\n");
+  }
 
   return swap_idx;
 }
-
-
-

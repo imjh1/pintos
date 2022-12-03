@@ -6,12 +6,12 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+/* page fault handling을 위한 supplement page */
 struct supplement_page {
-  void *vaddr; 
-  bool writable;
-  bool is_loaded;
-  struct hash_elem elem;
-  size_t swap_slot;
+  void *vaddr; 		// page의 virtual address
+  bool writable;	// writable 여부
+  struct hash_elem elem;// supplement page는 hash를 통해 관리
+  size_t swap_slot;	// disk swap을 위한 swap index
 };
 
 void sp_init (struct hash *spt);

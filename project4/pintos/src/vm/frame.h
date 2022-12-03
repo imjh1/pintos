@@ -11,10 +11,10 @@ struct list sec_chance_list;
 struct list_elem *check_frame;
 
 struct frame {
-  void *paddr;
-  struct supplement_page *sp;
-  struct thread *owner;
-  struct list_elem elem;
+  void *paddr;			// physical address
+  struct supplement_page *sp;	// 해당 frame에 mapping된 page
+  struct thread *owner;		// page의 owner
+  struct list_elem elem;	// sec_chance list에서 탐색을 위한 list_elem
 };
 
 void sec_chance_init (void);
@@ -24,4 +24,3 @@ struct list_elem *next_frame (void);
 void evict_frame (void);
 
 #endif
-
