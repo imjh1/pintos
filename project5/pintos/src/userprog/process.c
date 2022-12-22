@@ -51,7 +51,7 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  
   /* Create a new thread to execute FILE_NAME. */
   struct thread* cur = thread_current();
   tid = thread_create (real_file, PRI_DEFAULT, start_process, fn_copy);
@@ -64,7 +64,7 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy);
     return wait(tid);
   }
-
+  
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;

@@ -206,7 +206,7 @@ int wait (tid_t pid){
 bool create (const char *file, unsigned initial_size){
   if(file == NULL)
     exit(-1);
-  return filesys_create(file, initial_size);  
+  return filesys_create(file, initial_size, false);  
 }
 
 bool remove (const char *file){

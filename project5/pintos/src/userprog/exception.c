@@ -148,9 +148,9 @@ page_fault (struct intr_frame *f)
   
   /* Project 4 */
   /* Invalid Reference */
-  if(!not_present || !is_user_vaddr(fault_addr) || !fault_addr)
+  if(!not_present || !is_user_vaddr(fault_addr) || !fault_addr){
     exit(-1); 
-
+  }
   /* fault address에 해당하는 page search */
   struct supplement_page *sp = sp_find(fault_addr);
 

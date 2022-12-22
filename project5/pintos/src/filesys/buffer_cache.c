@@ -16,7 +16,6 @@ void buffer_cache_init (void)
 
 void buffer_cache_terminate (void)
 {
-  printf("2\n");
   buffer_cache_flush_all();
 }
 
