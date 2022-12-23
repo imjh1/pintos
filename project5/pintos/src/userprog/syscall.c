@@ -11,6 +11,7 @@
 #include "devices/shutdown.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -160,14 +161,33 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     /* Project 4 only. */
     case SYS_CHDIR:                  /* Change the current directory. */
+        check_address(f, 1);
+
+        f->eax = chdir((const char*)*(uint32_t *)(f->esp + word));
 	break;
     case SYS_MKDIR:                  /* Create a directory. */
+        check_address(f, 1);
+	fd = (int)*(uint32_t *)(f->esp + word);
+      
+        f->eax = mkdir((const char*)*(uint32_t *)(f->esp + word));
 	break;
     case SYS_READDIR:                /* Reads a directory entry. */
+        check_address(f, 2);
+        
+        fd = (int)*(uint32_t *)(f->esp + word);
+        f->eax = readdir(fd, (const char*)*(uint32_t *)(f->esp + 2 * word));
 	break;
     case SYS_ISDIR:                  /* Tests if a fd represents a directory. */
+        check_address(f, 1);
+
+        fd = (int)*(uint32_t *)(f->esp + word);
+        f->eax = isdir(fd);
 	break;
     case SYS_INUMBER:                /* Returns the inode number for a fd. */
+        check_address(f, 1);
+
+        fd = (int)*(uint32_t *)(f->esp + word); 
+        f->eax = inumber(fd);
 	break;
 
     /* Project 2 additional */
@@ -218,9 +238,12 @@ int open (const char *file){
 
   if(file == NULL)
     return -1;
-
+  
   struct thread *cur = thread_current();
   struct file *f = filesys_open(file);
+
+  
+
   /* file이 존재하는 경우 */
   if(f != NULL){
     /* file descriptor table 탐색하여
@@ -303,7 +326,7 @@ int write (int fd, const void *buffer, unsigned length)
     putbuf(buffer, length);
     ret = length;
   }
-  else{
+  else if (!isdir (fd)){
     struct thread *cur = thread_current();
     if(cur->file_descriptor[fd] != NULL)
       ret = file_write(cur->file_descriptor[fd], buffer, length);
@@ -339,6 +362,8 @@ void close (int fd){
     exit(-1); 
 
   file_close(cur->file_descriptor[fd]);
+  if(isdir(fd))
+    
   cur->file_descriptor[fd] = NULL;  	
 }
 /*
@@ -346,23 +371,53 @@ mapid_t mmap (int fd, void *addr){
 	return -1;
 }
 void munmap (mapid_t){
-}
+} */
 bool chdir (const char *dir){
-	return true;
+  struct dir *directory = open_directory_path (dir);
+  if (directory){
+    dir_close (thread_current ()->cur_dir);
+    thread_current ()->cur_dir = directory;
+    return true;
+  } 
+
+  return false;
 }
+
 bool mkdir (const char *dir){
-	return true;
+  /* directory로 file 생성 */
+  return filesys_create(dir, 0, true);
 }
-bool readdir (int fd, char name[READDIR_MAX_LEN + 1]){
-	return true;
+
+bool readdir (int fd, char* name){
+  return false;
+//  struct file *file = thread_current ()->file_descriptor[fd];  
+  
+//  if(file != NULL && file->inode != NULL && inode_is_dir(file->inode)){
+    
+    //return dir_readdir (
+//  }
+
+//  return false;
 }
+
 bool isdir (int fd){
-	return -1;
+  struct file *file = thread_current ()->file_descriptor[fd];
+  
+  if(file)
+    return inode_is_dir (file_get_inode (file));
+  
+  return false;
 }
+
 int inumber (int fd){
-	return -1;
+  struct file *file = thread_current ()->file_descriptor[fd];
+  
+  if(file) 
+    return inode_get_inumber (file_get_inode (file));
+  
+  return -1;
 }
-*/
+
 int fibonacci (int n){
   if(n <= 0)
     return 0;

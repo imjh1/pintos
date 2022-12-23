@@ -123,6 +123,9 @@ struct thread
 
     /* Project4 */
     struct hash spt;
+    
+    /* Project5 */
+    struct dir *cur_dir;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

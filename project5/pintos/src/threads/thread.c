@@ -111,6 +111,7 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 
   initial_thread->par = NULL;
+  initial_thread->cur_dir = NULL;//dir_open_root ();
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -221,10 +222,18 @@ thread_create (const char *name, int priority,
 
   tid = t->tid = allocate_tid ();
 
-  /* parent의 nice, recent_cpu값 inherit */
+  /* 
+  Project3: parent의 nice, recent_cpu값 inherit 
+  Project5: parent의 current directory inherit
+  */
   if(t->par != NULL){
     t->nice = t->par->nice;
     t->recent_cpu = t->par->recent_cpu;
+//    t->cur_dir = t->par->cur_dir;
+//    if(t->par->cur_dir != NULL)
+//      t->cur_dir = dir_reopen (t->par->cur_dir);
+//    else
+//      t->cur_dir = dir_open_root ();
   }
 
   /* Stack frame for kernel_thread(). */
@@ -337,7 +346,7 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
-
+  
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */

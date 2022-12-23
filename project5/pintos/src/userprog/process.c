@@ -98,6 +98,11 @@ start_process (void *file_name_)
     thread_exit ();
   }
 
+  if (cur->par->cur_dir != NULL)
+    cur->cur_dir = dir_reopen (cur->par->cur_dir);
+  else
+    cur->cur_dir = NULL; //dir_open_root ();
+
   palloc_free_page (file_name);
   /* process descriptor에 load success */
   cur->load_success = true;
@@ -144,9 +149,13 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
 
+//  dir_close (cur->cur_dir);
   /* 열려있는 file descriptor 모두 close */
-  for (int i=2; i<128; i++)
+  for (int i=2; i<128; i++) {
+    
     close(i);
+  }
+  dir_close (cur->cur_dir);
 
   /* child list element 제거 */
   while(!list_empty(&cur->children))

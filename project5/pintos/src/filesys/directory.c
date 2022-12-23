@@ -4,6 +4,7 @@
 #include <list.h>
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include "threads/thread.h"
 #include "threads/malloc.h"
 
 /* A directory. */
@@ -139,7 +140,7 @@ dir_lookup (const struct dir *dir, const char *name,
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is_dir)
 {
   struct dir_entry e;
   off_t ofs;
@@ -234,3 +235,41 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+struct dir *open_directory_path (char *directory)
+{
+  int start = 0;
+  char str[255];
+  struct dir *dir;
+  
+  strlcpy (str, directory, strlen(directory) + 1);
+  /* absolute path */
+  if (str[0] == '/' || thread_current ()->cur_dir == NULL)
+    dir = dir_open_root ();
+  /* relative path */
+  else
+    dir = dir_reopen (thread_current ()->cur_dir); 
+
+  char *next_ptr;
+//  if(str[0] == '/')
+//    start = 1;
+  char *ptr = strtok_r (str, "/", &next_ptr); 
+  while(ptr){
+  //  printf("ptr: %s\n", ptr);
+    struct inode *disk_inode; 
+    if (!dir_lookup (dir, ptr, &disk_inode)){
+      dir_close (dir);
+      return NULL;
+    } 
+    
+    struct dir *next_dir = dir_open (disk_inode);
+    dir_close (dir);
+    if(!next_dir)
+      return NULL; 
+    dir = next_dir;
+    ptr = strtok_r (NULL, "/", &next_ptr);
+  } 
+
+  return dir;
+}
+

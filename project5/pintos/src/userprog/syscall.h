@@ -26,11 +26,11 @@ void close (int fd);
 //mapid_t mmap (int fd, void *addr);
 //void munmap (mapid_t);
 /* Project 4 */
-//bool chdir (const char *dir);
-//bool mkdir (const char *dir);
-//bool readdir (int fd, char name[READDIR_MAX_LEN + 1]);
-//bool isdir (int fd);
-//int inumber (int fd);
+bool chdir (const char *dir);
+bool mkdir (const char *dir);
+bool readdir (int fd, char* name);
+bool isdir (int fd);
+int inumber (int fd);
 /* Project 2 additional */
 int fibonacci (int n);
 int max_of_four_int (int a, int b, int c, int d);
