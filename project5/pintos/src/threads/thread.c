@@ -222,6 +222,14 @@ thread_create (const char *name, int priority,
 
   tid = t->tid = allocate_tid ();
 
+  for (int i=0; i<128; i++){
+//    t->file_descriptor[i] = NULL;
+//    t->file_dir[i] = NULL;
+    t->file_desc[i] = (struct file_desc *)malloc (sizeof (struct file_desc));
+    t->file_desc[i]->f = NULL;
+    t->file_desc[i]->d = NULL;
+  }
+
   /* 
   Project3: parent의 nice, recent_cpu값 inherit 
   Project5: parent의 current directory inherit
@@ -702,9 +710,14 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->new_process_load, 0);
   sema_init(&t->child_process_exit, 0);
   /* file descriptor 초기화 */
-  for (int i=0; i<128; i++)
-    t->file_descriptor[i] = NULL;
-
+/*
+  for (int i=0; i<128; i++){
+//    t->file_descriptor[i] = NULL;
+//    t->file_dir[i] = NULL;
+    t->file_desc[i] = (struct file_desc *)malloc (sizeof (struct file_desc));
+    t->file_desc[i]->f = NULL;
+    t->file_desc[i]->d = NULL;
+  }*/
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

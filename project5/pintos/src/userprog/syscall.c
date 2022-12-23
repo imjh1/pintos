@@ -12,6 +12,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include "filesys/directory.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -226,10 +227,14 @@ int wait (tid_t pid){
 bool create (const char *file, unsigned initial_size){
   if(file == NULL)
     exit(-1);
+  if (strlen(file) > NAME_MAX)
+    return false; 
+  
   return filesys_create(file, initial_size, false);  
 }
 
 bool remove (const char *file){
+  /* directory file remove시 empty check 해야함 */
   return filesys_remove(file);
 }
 
@@ -241,16 +246,22 @@ int open (const char *file){
   
   struct thread *cur = thread_current();
   struct file *f = filesys_open(file);
-
-  
-
   /* file이 존재하는 경우 */
   if(f != NULL){
+    /* open directory 체크 */ 
+    struct inode *disk_inode = file_get_inode (f);
+    struct dir *dir;
+    if (disk_inode != NULL && inode_is_dir (disk_inode))
+      dir = dir_open (inode_reopen (disk_inode));
+    else
+      dir = NULL;
+    
     /* file descriptor table 탐색하여
        가장 작은 free fd에 open한 file의 포인터 저장 */
     for(int i=2; i<128; i++){
-      if(cur->file_descriptor[i] == NULL){
-        cur->file_descriptor[i] = f;
+      if(cur->file_desc[i]->f == NULL){
+        cur->file_desc[i]->f = f;		// file 저장
+        cur->file_desc[i]->d = dir;		// direcotry 저장
         ret = i;
 
 	/* Denying Writes to Executable */
@@ -272,10 +283,10 @@ int filesize (int fd){
   if(fd < 0 || fd >= 128)
     exit(-1);
 
-  if(cur->file_descriptor[fd] == NULL)
+  if(cur->file_desc[fd]->f == NULL)
     exit(-1);
 
-  return file_length(cur->file_descriptor[fd]);
+  return file_length(cur->file_desc[fd]->f);
 }
 
 int read (int fd, void *buffer, unsigned length){
@@ -304,8 +315,8 @@ int read (int fd, void *buffer, unsigned length){
   }
   else{
     struct thread *cur = thread_current();
-    if(cur->file_descriptor[fd] != NULL)
-      ret = file_read(cur->file_descriptor[fd], buffer, length);
+    if(cur->file_desc[fd]->f != NULL)
+      ret = file_read(cur->file_desc[fd]->f, buffer, length);
   }
   /* Critical Section */
   lock_release(&file_read_write);
@@ -328,8 +339,8 @@ int write (int fd, const void *buffer, unsigned length)
   }
   else if (!isdir (fd)){
     struct thread *cur = thread_current();
-    if(cur->file_descriptor[fd] != NULL)
-      ret = file_write(cur->file_descriptor[fd], buffer, length);
+    if(cur->file_desc[fd]->f != NULL)
+      ret = file_write(cur->file_desc[fd]->f, buffer, length);
   }
   /* Critical Section */
   lock_release(&file_read_write);
@@ -341,16 +352,16 @@ void seek (int fd, unsigned position){
   struct thread *cur = thread_current();
 
   /* file의 크기 이상으로 pos를 변경할 경우 error */
-  if(filesize(fd) <= position)
-    exit(-1);
+//  if(filesize(fd) <= position)
+//    exit(-1);
 
-  file_seek(cur->file_descriptor[fd], position);	
+  file_seek(cur->file_desc[fd]->f, position);	
 }
 
 unsigned tell (int fd){
   struct thread *cur = thread_current();
 
-  return file_tell(cur->file_descriptor[fd]);
+  return file_tell(cur->file_desc[fd]->f);
 }
 
 void close (int fd){
@@ -361,10 +372,11 @@ void close (int fd){
   if(fd <= 1 || fd >= 128)
     exit(-1); 
 
-  file_close(cur->file_descriptor[fd]);
-  if(isdir(fd))
-    
-  cur->file_descriptor[fd] = NULL;  	
+  file_close(cur->file_desc[fd]->f);
+  cur->file_desc[fd]->f = NULL;
+  /* 각 fd에 해당하는 directory도 닫아줌, for persistence */  
+  dir_close (cur->file_desc[fd]->d);
+  cur->file_desc[fd]->d = NULL;	
 }
 /*
 mapid_t mmap (int fd, void *addr){
@@ -375,6 +387,7 @@ void munmap (mapid_t){
 bool chdir (const char *dir){
   struct dir *directory = open_directory_path (dir);
   if (directory){
+    /* working directory를 "dir" 경로로 변경 */
     dir_close (thread_current ()->cur_dir);
     thread_current ()->cur_dir = directory;
     return true;
@@ -389,20 +402,21 @@ bool mkdir (const char *dir){
 }
 
 bool readdir (int fd, char* name){
-  return false;
-//  struct file *file = thread_current ()->file_descriptor[fd];  
-  
-//  if(file != NULL && file->inode != NULL && inode_is_dir(file->inode)){
-    
-    //return dir_readdir (
-//  }
+  struct file *file = thread_current ()->file_desc[fd]->f;  
+ 
+  if(file){
+    struct inode *disk_inode = file_get_inode (file); 
+    /* 해당 directory의 entry 읽음 */
+    if (disk_inode != NULL && inode_is_dir (disk_inode))
+      return dir_readdir (thread_current ()->file_desc[fd]->d, name);
+  }
 
 //  return false;
 }
 
 bool isdir (int fd){
-  struct file *file = thread_current ()->file_descriptor[fd];
-  
+  struct file *file = thread_current ()->file_desc[fd]->f;
+  /* 해당 fd file이 directory인지 여부 return */ 
   if(file)
     return inode_is_dir (file_get_inode (file));
   
@@ -410,8 +424,8 @@ bool isdir (int fd){
 }
 
 int inumber (int fd){
-  struct file *file = thread_current ()->file_descriptor[fd];
-  
+  struct file *file = thread_current ()->file_desc[fd]->f;
+  /* 해당 fd file의 inode sector return */
   if(file) 
     return inode_get_inumber (file_get_inode (file));
   

@@ -140,7 +140,7 @@ dir_lookup (const struct dir *dir, const char *name,
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector, bool is_dir)
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 {
   struct dir_entry e;
   off_t ofs;
@@ -202,6 +202,28 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  /* 지우려는 entry가 directory인 경우 empty check */
+  if (inode_is_dir (inode)) {
+    struct dir *d = dir_open (inode);
+    struct dir_entry de;
+    off_t pos = d->pos;
+  
+    d->pos = 0;
+    while (inode_read_at (d->inode, &de, sizeof de, d->pos) == sizeof de)
+      {
+        d->pos += sizeof de;
+	/* directory가 non-empty */
+        if (de.in_use)
+          {
+	    d->pos = pos;
+	    dir_close (d);
+            goto done;
+          }
+      }
+    d->pos = pos;
+    dir_close (d);
+  }
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
@@ -236,39 +258,47 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
+/* parsing한 directory path를 찾아가 해당 directory return */
 struct dir *open_directory_path (char *directory)
 {
-  int start = 0;
   char str[255];
   struct dir *dir;
-  
+
   strlcpy (str, directory, strlen(directory) + 1);
-  /* absolute path */
+  /* absolute path거나, current working directory init안된 경우 root부터 시작 */
   if (str[0] == '/' || thread_current ()->cur_dir == NULL)
     dir = dir_open_root ();
-  /* relative path */
+  /* relative path인 경우 current working directory부터 시작 */
   else
     dir = dir_reopen (thread_current ()->cur_dir); 
-
   char *next_ptr;
-//  if(str[0] == '/')
-//    start = 1;
+  /* "/" 기준으로 directory 구분하면서 찾아감 */
   char *ptr = strtok_r (str, "/", &next_ptr); 
   while(ptr){
-  //  printf("ptr: %s\n", ptr);
-    struct inode *disk_inode; 
+    struct inode *disk_inode;
+    /* "dir" 디렉터리에 "ptr"이라는 file(directory) 존재하는지 check */ 
     if (!dir_lookup (dir, ptr, &disk_inode)){
       dir_close (dir);
       return NULL;
     } 
     
+    /* 존재할 경우 해당 directory 새로open */
     struct dir *next_dir = dir_open (disk_inode);
     dir_close (dir);
-    if(!next_dir)
-      return NULL; 
+    if (!next_dir)
+      return NULL;
+
+    /* "dir"를 새로 open한 directory로 변경하고, 
+       "/" 기준으로 문자열 다시 parsing하여 위 과정 반복 */
     dir = next_dir;
     ptr = strtok_r (NULL, "/", &next_ptr);
   } 
+
+  /* path를 따라 open한 directory가 이미 remove된 경우 */
+  if (inode_is_remove (dir_get_inode(dir))) {
+    dir_close(dir);
+    return NULL;
+  }
 
   return dir;
 }

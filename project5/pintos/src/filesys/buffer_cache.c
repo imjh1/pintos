@@ -25,7 +25,6 @@ void buffer_cache_read (block_sector_t sector, uint8_t *buffer, int chunk_size, 
   /* buffer entry 찾기 */
   struct buffer_cache_entry *bce = find_buffer_cache (sector);
   bce->reference_bit = true;
-  
   memcpy (buffer + bytes_read, bce->buffer + sector_ofs, chunk_size); 
 
   lock_release(&buffer_cache_lock);  
@@ -37,7 +36,6 @@ void buffer_cache_write (block_sector_t sector, uint8_t *buffer, int chunk_size,
   /* buffer entry 찾기 */
   struct buffer_cache_entry *bce = find_buffer_cache (sector);
   bce->reference_bit = true;  
- 
   memcpy (bce->buffer + sector_ofs, buffer + bytes_written, chunk_size);
   bce->dirty_bit = true;
   lock_release(&buffer_cache_lock);
@@ -101,11 +99,8 @@ struct buffer_cache_entry *buffer_cache_select_victim (block_sector_t sector)
   }
   
   /* dirty bit가 true면 disk write */
-  if(evict_buffer->dirty_bit){
-    lock_release (&buffer_cache_lock);
+  if(evict_buffer->dirty_bit)
     buffer_cache_flush_entry(evict_buffer);
-    lock_acquire (&buffer_cache_lock);
-  }
 
   evict_buffer->valid_bit = true;
   evict_buffer->dirty_bit = false;
@@ -116,10 +111,8 @@ struct buffer_cache_entry *buffer_cache_select_victim (block_sector_t sector)
 
 void buffer_cache_flush_entry(struct buffer_cache_entry* bce)
 {
-  lock_acquire (&buffer_cache_lock);
   block_write (fs_device, bce->disk_sector, bce->buffer);
   bce->dirty_bit = false; 
-  lock_release (&buffer_cache_lock);
 }
 
 void buffer_cache_flush_all(void)

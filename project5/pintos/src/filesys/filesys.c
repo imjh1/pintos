@@ -23,8 +23,10 @@ filesys_init (bool format)
 
   inode_init ();
   free_map_init ();
+
   if (format) 
     do_format ();
+
   free_map_open ();
 }
 
@@ -35,9 +37,9 @@ filesys_done (void)
 {
   /* For Persistence */
   free_map_close ();
-  buffer_cache_terminate ();
+  buffer_cache_terminate (); // buffer cache flush all
 }
-
+
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
@@ -46,21 +48,18 @@ bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
   block_sector_t inode_sector = 0;
+//  struct dir *dir = dir_open_root (); // create file in root
+  /* "name" parsing하여 directory path와 생성할 file(directory) name 구분 */
   char *directory = (char *)malloc(sizeof(char) * (strlen(name) + 1));
   char *file = (char *)malloc(sizeof(char) * (NAME_MAX + 1));
-  parse_path (name, directory, file);
-//  printf("name: %s\n", name);
-//  printf("directory: %s, file: %s\n", directory, file);
-//  struct dir *dir = dir_open_root ();	// create file in root
-  struct dir *dir = open_directory_path (directory);
+  parse_path (name, directory, file);	// "/" 기준으로 parsing
+  struct dir *dir = open_directory_path (directory); // parsing한 subdirectory open 
 
-//  if(dir == NULL)
-//    printf("dir NULL\n");
- 
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_dir)
-                  && dir_add (dir, /*name*/file, inode_sector, is_dir));
+                  && dir_add (dir, /*name*/file, inode_sector));
+	
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
@@ -90,10 +89,20 @@ filesys_open (const char *name)
   struct dir *dir = open_directory_path (directory);
   struct inode *inode = NULL;
 
-  if (dir != NULL)
+
+  if (dir != NULL) 
     dir_lookup (dir, file, &inode);
   dir_close (dir);
-
+/*
+  if (dir != NULL) {
+    dir_lookup (dir, file, &inode);
+    dir_close (dir);
+  }
+  else
+    inode = dir_get_inode (dir);
+  if(inode == NULL || inode_is_remove (inode))
+    return NULL;
+*/
   return file_open (inode);
 }
 
@@ -109,6 +118,7 @@ filesys_remove (const char *name)
   parse_path (name, directory, file);
 //  struct dir *dir = dir_open_root ();
   struct dir *dir = open_directory_path (directory);
+  
   bool success = dir != NULL && dir_remove (dir, file);
   dir_close (dir); 
 
@@ -129,7 +139,7 @@ do_format (void)
 
 void parse_path (char *name, char *directory, char *file)
 {
-  char str[255];
+  char str[NAME_MAX + 1];
   strlcpy(str, name, strlen(name) + 1);
   char *next_ptr;
   char *ptr = strtok_r(str, "/", &next_ptr);
@@ -145,7 +155,7 @@ void parse_path (char *name, char *directory, char *file)
       strlcat(directory, "/", strlen(directory) + 2);
     }
 
-    strlcpy(file, ptr, strlen(ptr) + 1);
+    strlcpy (file, ptr, strlen(ptr) + 1);
     ptr = strtok_r(NULL, "/", &next_ptr);
   }
 }

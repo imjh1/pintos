@@ -239,7 +239,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0)
         break;
- 
+/* 
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           // Read full sector directly into caller's buffer. 
@@ -257,10 +257,10 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
           block_read (fs_device, sector_idx, bounce);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
         }
-      
+  */    
       /* Advance. */
       /* Buffer Cache */
-  //    buffer_cache_read (sector_idx, buffer, chunk_size, bytes_read, sector_ofs);
+      buffer_cache_read (sector_idx, buffer, chunk_size, bytes_read, sector_ofs);
 
       size -= chunk_size;
       offset += chunk_size;
@@ -311,7 +311,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0)
         break;
-      
+  /*    
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           // Write full sector directly to disk. 
@@ -329,7 +329,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
           // If the sector contains data before or after the chunk
           //   we're writing, then we need to read in the sector
           //   first.  Otherwise we start with a sector of all zeros.  
-         if (sector_ofs > 0 || chunk_size < sector_left) 
+          if (sector_ofs > 0 || chunk_size < sector_left) 
             block_read (fs_device, sector_idx, bounce);
           else
             memset (bounce, 0, BLOCK_SECTOR_SIZE);
@@ -337,10 +337,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
           block_write (fs_device, sector_idx, bounce);
         }
       
-
+*/
       /* Advance. */
       /* Buffer Cache */
-     // buffer_cache_write (sector_idx, buffer, chunk_size, bytes_written, sector_ofs);
+      buffer_cache_write (sector_idx, buffer, chunk_size, bytes_written, sector_ofs);
 
       size -= chunk_size;
       offset += chunk_size;
@@ -382,6 +382,12 @@ inode_length (const struct inode *inode)
 bool inode_is_dir (const struct inode *inode)
 {
   return inode->data.is_dir;
+}
+
+/* inode remove 여부 return */
+bool inode_is_remove (const struct inode *inode)
+{
+  return inode->removed;
 }
 
 bool inode_block_allocate (struct inode_disk *disk_inode, size_t sectors)

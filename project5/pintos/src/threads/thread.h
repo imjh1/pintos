@@ -21,6 +21,11 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
+struct file_desc
+  {
+    struct file *f;
+    struct dir *d;
+  };
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -114,7 +119,12 @@ struct thread
     struct semaphore new_process_load;  /* child process 생성 위한 semaphore */
     struct semaphore child_process_exit;/* child process 종료 위한 semaphore */
     int exit_status;                    /* process의 exit status */
-    struct file *file_descriptor[128];	/* file descriptors */
+
+    /* Project5 */
+//    struct file *file_descriptor[128];  /* file descriptors */
+//    struct dir *file_dir[128];          /* directory of fd */
+    struct file_desc *file_desc[128];	/* file, directory descriptor */
+    struct dir *cur_dir;                /* current working directory */
 
     /* Project3 */
     int64_t wakeup_time;
@@ -124,8 +134,6 @@ struct thread
     /* Project4 */
     struct hash spt;
     
-    /* Project5 */
-    struct dir *cur_dir;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

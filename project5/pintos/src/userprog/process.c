@@ -98,8 +98,9 @@ start_process (void *file_name_)
     thread_exit ();
   }
 
+  /* current working directory init */
   if (cur->par->cur_dir != NULL)
-    cur->cur_dir = dir_reopen (cur->par->cur_dir);
+    cur->cur_dir = dir_reopen (cur->par->cur_dir); // parent의 cwd inherit
   else
     cur->cur_dir = NULL; //dir_open_root ();
 
@@ -149,11 +150,10 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
 
-//  dir_close (cur->cur_dir);
-  /* 열려있는 file descriptor 모두 close */
-  for (int i=2; i<128; i++) {
-    
-    close(i);
+  /* 열려있는 file descriptor와 directory  모두 close */
+  for (int i=2; i<128; i++) { 
+    close (i);
+    dir_close (cur->file_desc[i]->d);
   }
   dir_close (cur->cur_dir);
 
