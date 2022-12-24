@@ -227,6 +227,7 @@ int wait (tid_t pid){
 bool create (const char *file, unsigned initial_size){
   if(file == NULL)
     exit(-1);
+  /* file 이름 길이가 14 초과하는 경우 */
   if (strlen(file) > NAME_MAX)
     return false; 
   
@@ -386,6 +387,8 @@ void munmap (mapid_t){
 } */
 bool chdir (const char *dir){
   struct dir *directory = open_directory_path (dir);
+
+  /* argument로 넘어온 "dir" path가 유효한 경우 */
   if (directory){
     /* working directory를 "dir" 경로로 변경 */
     dir_close (thread_current ()->cur_dir);
@@ -402,22 +405,17 @@ bool mkdir (const char *dir){
 }
 
 bool readdir (int fd, char* name){
-  struct file *file = thread_current ()->file_desc[fd]->f;  
- 
-  if(file){
-    struct inode *disk_inode = file_get_inode (file); 
-    /* 해당 directory의 entry 읽음 */
-    if (disk_inode != NULL && inode_is_dir (disk_inode))
-      return dir_readdir (thread_current ()->file_desc[fd]->d, name);
-  }
+  /* directory인 경우, fd로부터 directory entry read */
+  if (isdir (fd))
+    return dir_readdir (thread_current ()->file_desc[fd]->d, name);
 
-//  return false;
+  return false;
 }
 
 bool isdir (int fd){
   struct file *file = thread_current ()->file_desc[fd]->f;
   /* 해당 fd file이 directory인지 여부 return */ 
-  if(file)
+  if(file != NULL)
     return inode_is_dir (file_get_inode (file));
   
   return false;
@@ -426,7 +424,7 @@ bool isdir (int fd){
 int inumber (int fd){
   struct file *file = thread_current ()->file_desc[fd]->f;
   /* 해당 fd file의 inode sector return */
-  if(file) 
+  if(file != NULL) 
     return inode_get_inumber (file_get_inode (file));
   
   return -1;

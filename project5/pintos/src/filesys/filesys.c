@@ -35,9 +35,9 @@ filesys_init (bool format)
 void
 filesys_done (void) 
 {
-  /* For Persistence */
   free_map_close ();
-  buffer_cache_terminate (); // buffer cache flush all
+  /* buffer cache flush all for persistence */
+  buffer_cache_terminate (); 
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
@@ -48,18 +48,18 @@ bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
   block_sector_t inode_sector = 0;
-//  struct dir *dir = dir_open_root (); // create file in root
-  /* "name" parsing하여 directory path와 생성할 file(directory) name 구분 */
+  /* 기존 root에서 파일 create하는 방식
+  -> subdirectory를 parsing하여, 해당 directory의 파일을 create하는 방식으로 변경 */
   char *directory = (char *)malloc(sizeof(char) * (strlen(name) + 1));
   char *file = (char *)malloc(sizeof(char) * (NAME_MAX + 1));
-  parse_path (name, directory, file);	// "/" 기준으로 parsing
+  parse_path (name, directory, file);	// "name" parsing하여 directory path와 생성할 file(directory) name 구분 
   struct dir *dir = open_directory_path (directory); // parsing한 subdirectory open 
 
+  /* directory에 entry추가하여 inode_sector에 저장 */  
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_dir)
-                  && dir_add (dir, /*name*/file, inode_sector));
-	
+                  && dir_add (dir, file, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
@@ -77,15 +77,16 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
 struct file *
 filesys_open (const char *name)
 {
-  char *directory = (char *)malloc(sizeof(char) * (strlen(name) + 1));
-  char *file = (char *)malloc(sizeof(char) * (NAME_MAX + 1));
-
+  /* "/"이 인자로 넘어온 예외 case 처리 */
   if(!strcmp(name, "/")){
-    return file_open (inode_open (ROOT_DIR_SECTOR)); 
+    return file_open (inode_open (ROOT_DIR_SECTOR));
   }
 
+  /* 기존 root에서 파일 open하는 방식
+  -> subdirectory를 parsing하여, 해당 directory의 파일을 open하는 방식으로 변경 */
+  char *directory = (char *)malloc(sizeof(char) * (strlen(name) + 1));
+  char *file = (char *)malloc(sizeof(char) * (NAME_MAX + 1));
   parse_path (name, directory, file);
-//  struct dir *dir = dir_open_root ();
   struct dir *dir = open_directory_path (directory);
   struct inode *inode = NULL;
 
@@ -93,16 +94,7 @@ filesys_open (const char *name)
   if (dir != NULL) 
     dir_lookup (dir, file, &inode);
   dir_close (dir);
-/*
-  if (dir != NULL) {
-    dir_lookup (dir, file, &inode);
-    dir_close (dir);
-  }
-  else
-    inode = dir_get_inode (dir);
-  if(inode == NULL || inode_is_remove (inode))
-    return NULL;
-*/
+
   return file_open (inode);
 }
 
@@ -113,10 +105,11 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
+  /* 기존 root에서 파일 remove하는 방식
+  -> subdirectory를 parsing하여, 해당 directory의 파일을 remove하는 방식으로 변경 */
   char *directory = (char *)malloc(sizeof(char) * (strlen(name) + 1));
   char *file = (char *)malloc(sizeof(char) * (NAME_MAX + 1));
   parse_path (name, directory, file);
-//  struct dir *dir = dir_open_root ();
   struct dir *dir = open_directory_path (directory);
   
   bool success = dir != NULL && dir_remove (dir, file);
@@ -137,25 +130,29 @@ do_format (void)
   printf ("done.\n");
 }
 
+/* "/" 기준으로 "name"을 subdirectory인 "directory"와 파일이름 "file"로 parsing */ 
 void parse_path (char *name, char *directory, char *file)
 {
   char str[NAME_MAX + 1];
   strlcpy(str, name, strlen(name) + 1);
   char *next_ptr;
   char *ptr = strtok_r(str, "/", &next_ptr);
-  
+
+  /* absolute path */  
   if(name[0] == '/')
-    strlcpy(directory, "/", 2);
+    strlcpy (directory, "/", 2);
+  /* relative path */
   else
-    directory[0] = '\0';
-  file[0] = '\0';
-  while(ptr){
-    if(strlen(file)){
-      strlcat(directory, file, strlen(directory) + strlen(file) + 1);
-      strlcat(directory, "/", strlen(directory) + 2);
+    strlcpy (directory, "", 1);
+  strlcpy (file, "", 1);
+
+  while (ptr){
+    if(strlen (file)){
+      strlcat (directory, file, strlen (directory) + strlen (file) + 1);
+      strlcat (directory, "/", strlen (directory) + 2);
     }
 
-    strlcpy (file, ptr, strlen(ptr) + 1);
-    ptr = strtok_r(NULL, "/", &next_ptr);
+    strlcpy (file, ptr, strlen (ptr) + 1);
+    ptr = strtok_r (NULL, "/", &next_ptr);
   }
 }

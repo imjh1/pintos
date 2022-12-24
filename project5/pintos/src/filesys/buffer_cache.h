@@ -7,8 +7,8 @@
 #include "lib/stdbool.h"
 
 struct buffer_cache_entry{
-  bool valid_bit;
-  bool reference_bit;	// false시 evict
+  bool valid_bit;	// valid entry ?
+  bool reference_bit;	// referenced ?
   bool dirty_bit;	// true시 evict될 때 disk로 write 
   block_sector_t disk_sector;
   uint8_t buffer[BLOCK_SECTOR_SIZE];	// 512 * 1B

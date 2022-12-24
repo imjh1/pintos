@@ -98,12 +98,6 @@ start_process (void *file_name_)
     thread_exit ();
   }
 
-  /* current working directory init */
-  if (cur->par->cur_dir != NULL)
-    cur->cur_dir = dir_reopen (cur->par->cur_dir); // parent의 cwd inherit
-  else
-    cur->cur_dir = NULL; //dir_open_root ();
-
   palloc_free_page (file_name);
   /* process descriptor에 load success */
   cur->load_success = true;
@@ -153,7 +147,7 @@ process_exit (void)
   /* 열려있는 file descriptor와 directory  모두 close */
   for (int i=2; i<128; i++) { 
     close (i);
-    dir_close (cur->file_desc[i]->d);
+    free (cur->file_desc[i]);
   }
   dir_close (cur->cur_dir);
 

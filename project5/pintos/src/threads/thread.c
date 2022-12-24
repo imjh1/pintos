@@ -221,27 +221,26 @@ thread_create (const char *name, int priority,
   list_push_back(&t->par->children, &t->child);
 
   tid = t->tid = allocate_tid ();
-
+  
+  /* file descriptor table init */
   for (int i=0; i<128; i++){
-//    t->file_descriptor[i] = NULL;
-//    t->file_dir[i] = NULL;
     t->file_desc[i] = (struct file_desc *)malloc (sizeof (struct file_desc));
     t->file_desc[i]->f = NULL;
     t->file_desc[i]->d = NULL;
   }
 
   /* 
-  Project3: parent의 nice, recent_cpu값 inherit 
-  Project5: parent의 current directory inherit
+    Project3: parent의 nice, recent_cpu값 inherit 
+    project5: parent의 current woriking directory inherit
   */
   if(t->par != NULL){
     t->nice = t->par->nice;
     t->recent_cpu = t->par->recent_cpu;
-//    t->cur_dir = t->par->cur_dir;
-//    if(t->par->cur_dir != NULL)
-//      t->cur_dir = dir_reopen (t->par->cur_dir);
-//    else
-//      t->cur_dir = dir_open_root ();
+
+    if (t->par->cur_dir != NULL)
+      t->cur_dir = dir_reopen (t->par->cur_dir); // parent의 cwd inherit
+    else
+      t->cur_dir = NULL; //dir_open_root ();
   }
 
   /* Stack frame for kernel_thread(). */
