@@ -252,8 +252,16 @@ int open (const char *file){
     /* open directory 체크 */ 
     struct inode *disk_inode = file_get_inode (f);
     struct dir *dir;
-    if (disk_inode != NULL && inode_is_dir (disk_inode))
-      dir = dir_open (inode_reopen (disk_inode));
+    if (disk_inode != NULL && inode_is_dir (disk_inode)) {
+      /* current dir open */
+      if (!strcmp (file, "."))
+        dir = dir_reopen (cur->cur_dir);
+      else if (!strcmp (file, "..")){
+
+      }
+      else	
+        dir = dir_open (disk_inode);
+    }
     else
       dir = NULL;
     

@@ -12,6 +12,7 @@ struct dir
   {
     struct inode *inode;                /* Backing store. */
     off_t pos;                          /* Current position. */
+    struct dir *par;
   };
 
 /* A single directory entry. */
@@ -125,7 +126,18 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-  if (lookup (dir, name, &e, NULL))
+  /* current directory */
+  if (!strcmp (name, "."))
+    *inode = inode_reopen (dir->inode);
+  /* parent directory */
+  else if (!strcmp (name, "..")){
+    if (inode_get_inumber (dir->inode) == ROOT_DIR_SECTOR)
+      *inode = inode_reopen (dir->inode);
+    else {
+      *inode = inode_reopen (dir->par->inode);
+    }
+  }
+  else if (lookup (dir, name, &e, NULL))
     *inode = inode_open (e.inode_sector);
   else
     *inode = NULL;
@@ -157,6 +169,13 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   if (lookup (dir, name, NULL, NULL))
     goto done;
 
+  struct inode *new_entry = inode_open (inode_sector);
+  if (inode_is_dir (new_entry)) {
+    struct dir *subdir = dir_open (new_entry);
+    subdir->par = dir;
+    dir_close (subdir); 
+  }
+  inode_close (new_entry);
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -273,6 +292,19 @@ struct dir *open_directory_path (char *directory)
   char *ptr = strtok_r (directory, "/", &next_ptr); 
   /* "/" 기준으로 directory 구분하면서 찾아감 */
   while(ptr){
+    if (!strcmp (ptr, ".")){
+      ptr = strtok_r (NULL, "/", &next_ptr);
+      continue;
+    }
+
+    if (!strcmp (ptr, "..")){
+      struct dir *next_dir = dir_reopen (dir->par);
+      dir_close (dir);
+      dir = next_dir;
+      ptr = strtok_r (NULL, "/", &next_ptr);
+      continue;
+    }
+
     struct inode *disk_inode;
 
     /* "dir" 디렉터리에 "ptr"이라는 entry file(directory) 존재하는지 check */ 
@@ -282,7 +314,7 @@ struct dir *open_directory_path (char *directory)
     }
 
     /* 존재할 경우 해당 entry가 directory인지 check */
-    if (!inode_is_dir (&disk_inode))
+    if (!inode_is_dir (disk_inode))
       return NULL; 
     
     /* 해당 directory 새로 open 
@@ -302,4 +334,3 @@ struct dir *open_directory_path (char *directory)
 
   return dir;
 }
-

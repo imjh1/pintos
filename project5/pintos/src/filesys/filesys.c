@@ -78,9 +78,8 @@ struct file *
 filesys_open (const char *name)
 {
   /* "/"이 인자로 넘어온 예외 case 처리 */
-  if(!strcmp(name, "/")){
+  if(!strcmp(name, "/"))
     return file_open (inode_open (ROOT_DIR_SECTOR));
-  }
 
   /* 기존 root에서 파일 open하는 방식
   -> subdirectory를 parsing하여, 해당 directory의 파일을 open하는 방식으로 변경 */
@@ -117,7 +116,7 @@ filesys_remove (const char *name)
 
   return success;
 }
-
+
 /* Formats the file system. */
 static void
 do_format (void)
