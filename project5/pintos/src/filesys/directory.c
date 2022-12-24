@@ -34,13 +34,16 @@ dir_create (block_sector_t sector, size_t entry_cnt)
 /* Opens and returns the directory for the given INODE, of which
    it takes ownership.  Returns a null pointer on failure. */
 struct dir *
-dir_open (struct inode *inode) 
+dir_open (struct dir *par, struct inode *inode) 
 {
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
       dir->pos = 0;
+      if(par == NULL)
+        par = dir;
+      dir->par = par;
       return dir;
     }
   else
@@ -56,7 +59,7 @@ dir_open (struct inode *inode)
 struct dir *
 dir_open_root (void)
 {
-  return dir_open (inode_open (ROOT_DIR_SECTOR));
+  return dir_open (NULL, inode_open (ROOT_DIR_SECTOR));
 }
 
 /* Opens and returns a new directory for the same inode as DIR.
@@ -64,7 +67,7 @@ dir_open_root (void)
 struct dir *
 dir_reopen (struct dir *dir) 
 {
-  return dir_open (inode_reopen (dir->inode));
+  return dir_open (dir->par, inode_reopen (dir->inode));
 }
 
 /* Destroys DIR and frees associated resources. */
@@ -171,8 +174,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 
   struct inode *new_entry = inode_open (inode_sector);
   if (inode_is_dir (new_entry)) {
-    struct dir *subdir = dir_open (new_entry);
-    subdir->par = dir;
+    struct dir *subdir = dir_open (dir, new_entry);
     dir_close (subdir); 
   }
   inode_close (new_entry);
@@ -223,7 +225,7 @@ dir_remove (struct dir *dir, const char *name)
 
   /* 지우려는 entry가 directory인 경우 empty check */
   if (inode_is_dir (inode)) {
-    struct dir *d = dir_open (inode);
+    struct dir *d = dir_open (dir, inode);
     struct dir_entry de;
     off_t pos = d->pos;
   
@@ -320,7 +322,9 @@ struct dir *open_directory_path (char *directory)
     /* 해당 directory 새로 open 
        "dir"를 새로 open한 directory로 변경하고,
        "/" 기준으로 문자열 다시 parsing하여 위 과정 반복 */
-    struct dir *next_dir = dir_open (disk_inode);
+    struct dir *next_dir = dir_open (dir, disk_inode);
+    next_dir->par = dir_reopen (dir);
+
     dir_close (dir);
     dir = next_dir;
     ptr = strtok_r (NULL, "/", &next_ptr);

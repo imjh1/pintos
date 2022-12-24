@@ -260,7 +260,7 @@ int open (const char *file){
 
       }
       else	
-        dir = dir_open (disk_inode);
+        dir = dir_open (cur->cur_dir, disk_inode);
     }
     else
       dir = NULL;
